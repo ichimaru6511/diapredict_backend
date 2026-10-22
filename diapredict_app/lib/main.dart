@@ -8,6 +8,7 @@ import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/account_status_screen.dart';
+import 'screens/admin/admin_shell.dart';
 
 void main() async {
   // needed before using Firebase
@@ -118,7 +119,12 @@ class _ProfileGateState extends State<ProfileGate> {
             (data['status'] ?? 'pending').toString().trim().toLowerCase();
 
         if (status == 'approved') {
-          // role-based home screens (Doctor / Nurse / Admin) will be added later
+          final role =
+              (data['role'] ?? '').toString().trim().toLowerCase();
+          if (role == 'admin') {
+            return const AdminShell();
+          }
+          // Doctor and Nurse home screens will be added next
           return const HomeScreen();
         }
         return AccountStatusScreen(status: status);
