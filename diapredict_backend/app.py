@@ -26,9 +26,10 @@ BINARY_FEATURES = [
 
 THRESHOLD = 0.5
 
-DISCLAIMER = ("This result is a screening aid from a model trained on synthetic data. "
-              "It is not a medical diagnosis. If your fasting blood sugar or HbA1c "
-              "is above the normal range, please consult a doctor.")
+DISCLAIMER = ("This result is a decision-support aid from a prototype machine "
+              "learning model and has not been clinically validated. It is not a "
+              "medical diagnosis and should be interpreted together with clinical "
+              "judgement and confirmatory testing.")
 
 
 @app.route("/health", methods=["GET"])
