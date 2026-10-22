@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "569245959802",
+    "project_id": "testing-e331c",
+    "storage_bucket": "testing-e331c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569245959802:android:593f394b00d4b55e319dc3",
+        "android_client_info": {
+          "package_name": "com.diapredict.diapredict_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "569245959802-dftvh7g67ajec1blkpfj55cdjci7ds02.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmX8eiIXyKAzg8EMFU1uSC8NUClu5wCQ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "569245959802-dftvh7g67ajec1blkpfj55cdjci7ds02.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
