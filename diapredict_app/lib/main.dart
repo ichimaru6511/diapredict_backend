@@ -6,9 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
 import 'screens/account_status_screen.dart';
 import 'screens/admin/admin_shell.dart';
+import 'screens/clinician/clinician_shell.dart';
 
 void main() async {
   // needed before using Firebase
@@ -58,7 +58,7 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-// Step 2: read users/{uid} from Firestore and route by account status.
+// Step 2: read users/{uid} from Firestore and route by account status and role.
 // Only approved accounts can reach the app; everyone else sees a status screen.
 class ProfileGate extends StatefulWidget {
   final String uid;
@@ -124,8 +124,11 @@ class _ProfileGateState extends State<ProfileGate> {
           if (role == 'admin') {
             return const AdminShell();
           }
-          // Doctor and Nurse home screens will be added next
-          return const HomeScreen();
+          if (role == 'doctor' || role == 'nurse') {
+            return ClinicianShell(role: role);
+          }
+          // any other role value is not recognised
+          return AccountStatusScreen(status: 'role: $role');
         }
         return AccountStatusScreen(status: status);
       },
