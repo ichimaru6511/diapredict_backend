@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/notification_bell.dart';
 import 'patient_form_screen.dart';
 import 'patient_detail_screen.dart';
 
@@ -34,7 +35,10 @@ class _PatientsScreenState extends State<PatientsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Patients')),
+      appBar: AppBar(
+        title: const Text('Patients'),
+        actions: [NotificationBell(role: widget.role)],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Add Patient'),

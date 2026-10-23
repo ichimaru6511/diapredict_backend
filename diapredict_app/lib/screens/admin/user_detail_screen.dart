@@ -71,7 +71,16 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     }
 
     try {
-      await _userRef.update(update);
+      // a doctor who is no longer approved is also removed from the
+      // "on duty" list nurses use for referrals (both writes together)
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(_userRef, update);
+      if (newStatus != 'approved') {
+        batch.delete(FirebaseFirestore.instance
+            .collection('doctorDirectory')
+            .doc(widget.uid));
+      }
+      await batch.commit();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(doneMessage)),

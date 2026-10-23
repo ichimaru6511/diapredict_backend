@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../theme/app_theme.dart';
 import '../../utils/user_labels.dart';
+import '../../utils/duty.dart';
 
 // Profile for Doctors and Nurses: view details, edit name/workplace, logout.
 class ClinicianProfileScreen extends StatelessWidget {
@@ -72,6 +73,16 @@ class ClinicianProfileScreen extends StatelessWidget {
           .doc(user.uid)
           .update({'name': name, 'workplace': workplace});
       await user.updateDisplayName(name);
+      if (data['role'] == 'doctor') {
+        // update the name nurses see (only if the doctor has an entry)
+        final entry = await doctorDirectory.doc(user.uid).get();
+        if (entry.exists) {
+          await doctorDirectory.doc(user.uid).update({
+            'name': name,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated.')),
@@ -84,6 +95,50 @@ class ClinicianProfileScreen extends StatelessWidget {
         );
       }
     }
+  }
+
+  // Doctor only: turn "On duty today" on or off
+  Future<void> _setOnDuty(BuildContext context, bool onDuty) async {
+    final user = FirebaseAuth.instance.currentUser!;
+    try {
+      await doctorDirectory.doc(user.uid).set({
+        'name': user.displayName ?? '',
+        'dutyDate': onDuty ? todayKey() : '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update duty status (${e.code}).')),
+        );
+      }
+    }
+  }
+
+  Widget _dutyCard(BuildContext context, String uid) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: doctorDirectory.doc(uid).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data();
+        final onDuty = data != null && data['dutyDate'] == todayKey();
+        return Card(
+          child: SwitchListTile(
+            value: onDuty,
+            onChanged: snapshot.hasData ? (v) => _setOnDuty(context, v) : null,
+            secondary: Icon(
+              onDuty ? Icons.event_available : Icons.event_busy_outlined,
+              color: onDuty ? AppColors.accentGreen : AppColors.textSecondary,
+            ),
+            title: const Text('On duty today'),
+            subtitle: const Text(
+              'Nurses can refer flagged assessments to you today. '
+              'Turns off automatically tomorrow.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _infoRow(IconData icon, String label, String value) {
@@ -164,6 +219,10 @@ class ClinicianProfileScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (role == 'doctor') ...[
+                _dutyCard(context, uid),
+                const SizedBox(height: 12),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
