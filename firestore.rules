@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isApproved() { return hasProfile() && myProfile().status == 'approved'; }
+    function isAdmin() { return isApproved() && myProfile().role == 'admin'; }
+    function isDoctor() { return isApproved() && myProfile().role == 'doctor'; }
+    function isNurse() { return isApproved() && myProfile().role == 'nurse'; }
+    function isClinician() { return isDoctor() || isNurse(); }
+    function onlyChanges(fields) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields); }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.role in ['doctor', 'nurse']
+        && request.resource.data.keys().hasOnly(['name','email','role','registrationNo','registrationType','workplace','status','createdAt']);
+      allow update: if (signedIn() && request.auth.uid == uid && onlyChanges(['name','workplace']))
+        || (isAdmin() && request.auth.uid != uid
+            && onlyChanges(['status','approvedBy','approvedAt','statusUpdatedBy','statusUpdatedAt'])
+            && request.resource.data.status in ['pending','approved','rejected','deactivated']);
+      allow delete: if false;
+    }
+
+    // ---------- patients and assessments ----------
+    match /patients/{patientId} {
+      allow read, create, update: if isClinician();
+      allow delete: if false;
+
+      match /assessments/{assessmentId} {
+        allow read: if isClinician();
+        allow create: if isClinician() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.reviewStatus == 'none' && request.resource.data.enteredInError == false;
+
+        allow update:
+          // Nurse edits the shared notes (records who edited them)
+          if (isNurse() && resource.data.enteredInError == false
+              && onlyChanges(['nurseNotes','nurseNotesUpdatedBy','nurseNotesUpdatedByName','nurseNotesUpdatedAt'])
+              && request.resource.data.nurseNotesUpdatedBy == request.auth.uid)
+
+          // Nurse flags an assessment (not flagged yet, not entered in error),
+          // optionally referring it to one doctor (referredTo '' = any doctor)
+          || (isNurse() && resource.data.enteredInError == false
+              && onlyChanges(['reviewStatus','flaggedBy','flaggedByName','flaggedAt','referredTo','referredToName'])
+              && resource.data.reviewStatus == 'none'
+              && request.resource.data.reviewStatus == 'pending_review'
+              && request.resource.data.flaggedBy == request.auth.uid)
+
+          // Nurse removes her own flag, only while still pending
+          || (isNurse()
+              && onlyChanges(['reviewStatus','flaggedBy','flaggedByName','flaggedAt','referredTo','referredToName'])
+              && resource.data.reviewStatus == 'pending_review'
+              && resource.data.flaggedBy == request.auth.uid
+              && request.resource.data.reviewStatus == 'none')
+
+          // Doctor reviews a pending case (only once, records himself/herself as reviewer)
+          || (isDoctor() && resource.data.enteredInError == false
+              && onlyChanges(['doctorNotes','reviewStatus','reviewedBy','reviewedByName','reviewedAt'])
+              && resource.data.reviewStatus == 'pending_review'
+              && request.resource.data.reviewStatus == 'reviewed'
+              && request.resource.data.reviewedBy == request.auth.uid)
+
+          // Reviewing doctor edits his/her own review notes only
+          || (isDoctor()
+              && onlyChanges(['doctorNotes'])
+              && resource.data.reviewStatus == 'reviewed'
+              && resource.data.reviewedBy == request.auth.uid)
+
+          // Creator marks the assessment as entered in error (one-way)
+          || (isClinician() && resource.data.createdBy == request.auth.uid
+              && onlyChanges(['enteredInError','errorReason','errorMarkedAt'])
+              && resource.data.enteredInError == false && request.resource.data.enteredInError == true);
+
+        allow delete: if false;
+      }
+    }
+
+    // Review Queue (collection-group query)
+    match /{path=**}/assessments/{assessmentId} { allow read: if isClinician(); }
+
+    // ---------- doctors on duty (for nurse referrals) ----------
+    match /doctorDirectory/{uid} {
+      allow read: if isClinician();
+      allow create, update: if isDoctor() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name','dutyDate','updatedAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- notifications ----------
+    match /notifications/{notificationId} {
+      allow read: if isClinician() && resource.data.recipientUid == request.auth.uid;
+      allow read: if isDoctor() && resource.data.recipientRole == 'doctor';
+      allow create: if isClinician() && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.readBy.size() == 0
+        && request.resource.data.keys().hasOnly(['type','recipientRole','recipientUid','patientId','patientName','assessmentId','probability','predictedClass','message','createdBy','createdByName','createdAt','readBy'])
+        && ((isNurse() && request.resource.data.type == 'flagged'
+             && ((request.resource.data.recipientRole == 'doctor' && request.resource.data.recipientUid == '')
+                 || (request.resource.data.recipientRole == '' && request.resource.data.recipientUid != '')))
+            || (isDoctor() && request.resource.data.type == 'reviewed' && request.resource.data.recipientRole == '' && request.resource.data.recipientUid != ''));
+      allow update: if onlyChanges(['readBy'])
+        && ((isClinician() && resource.data.recipientUid == request.auth.uid) || (isDoctor() && resource.data.recipientRole == 'doctor'))
+        && request.resource.data.readBy.hasAll(resource.data.readBy)
+        && request.resource.data.readBy.hasAll([request.auth.uid])
+        && request.resource.data.readBy.size() <= resource.data.readBy.size() + 1;
+      allow delete: if false;
+    }
+  }
+}
