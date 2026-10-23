@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/notification_center.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/assessment_labels.dart';
+import '../../widgets/label_chip.dart';
 import 'assessment_detail_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
@@ -96,14 +97,11 @@ class NotificationsScreen extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           backgroundColor: AppColors.surfaceLight,
-                                                   child: Icon(
+                          child: Icon(
                             flagged ? Icons.flag_outlined : Icons.task_alt,
-                            // grey once read; coloured while unread
-                            color: read
-                                ? AppColors.textSecondary
-                                : (flagged
-                                    ? AppColors.danger
-                                    : AppColors.accentGreen),
+                            color: flagged
+                                ? AppColors.danger
+                                : AppColors.accentGreen,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -118,6 +116,13 @@ class NotificationsScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text((data['message'] ?? '').toString()),
+                              // what has happened to the assessment since
+                              _CurrentStatus(
+                                patientId: (data['patientId'] ?? '').toString(),
+                                assessmentId:
+                                    (data['assessmentId'] ?? '').toString(),
+                                type: (data['type'] ?? '').toString(),
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 formatDateTime(data['createdAt']),
@@ -147,6 +152,61 @@ class NotificationsScreen extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+// Shows the CURRENT status of the assessment a notification is about,
+// because the notification text only describes what happened at that time.
+//   - entered in error         -> red "Entered in error - no action needed"
+//   - flag notification, but the case is now reviewed -> "Reviewed by X"
+//   - flag notification, but the flag was removed     -> "Flag removed"
+class _CurrentStatus extends StatelessWidget {
+  final String patientId;
+  final String assessmentId;
+  final String type;
+
+  const _CurrentStatus({
+    required this.patientId,
+    required this.assessmentId,
+    required this.type,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (patientId.isEmpty || assessmentId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('patients')
+          .doc(patientId)
+          .collection('assessments')
+          .doc(assessmentId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final a = snapshot.data?.data();
+        if (a == null) return const SizedBox.shrink();
+
+        String text = '';
+        Color color = AppColors.textSecondary;
+
+        if (a['enteredInError'] == true) {
+          text = 'Entered in error - no action needed';
+          color = AppColors.danger;
+        } else if (type == 'flagged' && a['reviewStatus'] == 'reviewed') {
+          text = 'Reviewed by ${a['reviewedByName'] ?? '-'}';
+          color = reviewStatusColor('reviewed');
+        } else if (type == 'flagged' && a['reviewStatus'] == 'none') {
+          text = 'Flag removed';
+        }
+
+        if (text.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: LabelChip(text: text, color: color),
+        );
+      },
     );
   }
 }
